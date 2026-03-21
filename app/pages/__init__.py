@@ -1,4 +1,4 @@
 
 from .login_page import LoginPage
-from .singin_page import SettingsPage
+from .signin_page import SigninPage
 from .dashboard import Dashboard

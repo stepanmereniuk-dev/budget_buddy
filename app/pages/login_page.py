@@ -1,94 +1,109 @@
 import sys
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QFormLayout, QLabel, QLineEdit, QPushButton, QFrame, QMessageBox,
-    QStackedWidget
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QFrame, QMessageBox, QLineEdit
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap   
+
+from components import Input, Button
+from servises import UserService       
+
 
 class LoginPage(QWidget):
     login_success = Signal()         
+    go_to_register = Signal()
 
     def __init__(self):
         super().__init__()
+        self.user_service = UserService()
         self.setup_ui()
 
     def setup_ui(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setAlignment(Qt.AlignCenter)
+        main_layout = QHBoxLayout(self)
         main_layout.setSpacing(20)
-        main_layout.addStretch()
+        main_layout.setContentsMargins(40, 40, 40, 40)
+        greeting_frame = QFrame()
+        greeting_frame.setStyleSheet("QFrame { background-color: #6A1B9A; border-radius: 20px; }")
+        greeting_frame.setMinimumSize(400, 500)
 
-        card = QFrame()
-        card.setStyleSheet("""
+        greeting_layout = QVBoxLayout(greeting_frame)
+        greeting_layout.setSpacing(30)
+        greeting_layout.setContentsMargins(50, 120, 50, 120)
+        greeting_layout.setAlignment(Qt.AlignCenter)
+
+        hello = QLabel("Hello, Friend!")
+        hello.setStyleSheet("color: white; font-size: 32px; font-weight: bold;")
+        hello.setAlignment(Qt.AlignCenter)
+
+        desc = QLabel("Register with your personal details to use all\nof the platform's features.")
+        desc.setStyleSheet("color: white; font-size: 16px;")
+        desc.setWordWrap(True)
+        desc.setAlignment(Qt.AlignCenter)
+
+        greeting_layout.addWidget(hello)
+        greeting_layout.addWidget(desc)
+        greeting_layout.addStretch()
+
+        form_frame = QFrame()
+        form_frame.setStyleSheet("""
             QFrame {
                 background-color: white;
-                border-radius: 16px;
-                padding: 40px 30px;
+                border: 1px solid #ddd;
+                border-radius: 20px;
             }
         """)
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(18)
+        form_frame.setMinimumSize(400, 500)
 
-        self.icon_label = QLabel()
-        self.icon_label.setText("🔑")                 
-        self.icon_label.setStyleSheet("font-size: 110px;")
-        self.icon_label.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(self.icon_label)
+        form_layout = QVBoxLayout(form_frame)
+        form_layout.setSpacing(25)
+        form_layout.setContentsMargins(50, 60, 50, 60)
 
-        title = QLabel("Login")
-        title.setStyleSheet("font-size: 26px; font-weight: bold; color: #222;")
+        title = QLabel("Sign In")
+        title.setStyleSheet("font-size: 28px; font-weight: bold; color: #333;")
         title.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(title)
 
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignRight)
-        form.setVerticalSpacing(12)
+        self.email_input = Input("Email").default_input()
+        self.password_input = Input("Password").default_input()
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
 
-        self.username = QLineEdit()
-        self.username.setPlaceholderText("Username or email")
-        self.username.setMinimumWidth(260)
-        form.addRow("Username:", self.username)
+        button_login = Button("Sign In").default_button()
+        button_login.clicked.connect(self.check_login)
 
-        self.password = QLineEdit()
-        self.password.setEchoMode(QLineEdit.Password)
-        self.password.setPlaceholderText("Password")
-        form.addRow("Password:", self.password)
+        switch_label = QLabel(
+            "Don't have an account? "
+            "<a href='register' style='color: #6A1B9A; text-decoration: none;'>Sign Up</a>"
+        )
+        switch_label.setTextFormat(Qt.TextFormat.RichText)
+        switch_label.setAlignment(Qt.AlignCenter)
+        switch_label.linkActivated.connect(lambda _: self.go_to_register.emit())
 
-        card_layout.addLayout(form)
+        form_layout.addWidget(title)
+        form_layout.addWidget(self.email_input)
+        form_layout.addWidget(self.password_input)
+        form_layout.addStretch()
+        form_layout.addWidget(button_login)
+        form_layout.addWidget(switch_label)
 
-        # Login button
-        self.login_btn = QPushButton("Login")
-        self.login_btn.setDefault(True)                  
-        self.login_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                padding: 12px;
-                font-size: 16px;
-                font-weight: bold;
-                border-radius: 8px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
-                background-color: #0D47A1;
-            }
-        """)
-        self.login_btn.clicked.connect(self.attempt_login)
-        card_layout.addWidget(self.login_btn)
+        main_layout.addWidget(greeting_frame, 1)
+        main_layout.addWidget(form_frame, 1)
 
-        main_layout.addWidget(card)
-        main_layout.addStretch()
+        self.setMinimumSize(880, 560)
 
-    def attempt_login(self):
-        user = self.username.text().strip()
-        pw = self.password.text().strip()
-        if user and pw:
-            self.login_success.emit()         
+    def check_login(self):
+        email = self.email_input.text().strip()
+        password = self.password_input.text().strip()
+
+        if not email or not password:
+            QMessageBox.warning(self, "Помилка", "Введіть email та пароль!")
+            return
+        user = self.user_service.authenticate_user(email, password)
+
+        if user:
+            QMessageBox.information(
+                self, 
+                "Успіх", 
+                f"Вхід виконано!\nПривіт, {user['first_name']} 👋"
+            )
+            self.login_success.emit()            
         else:
-            QMessageBox.warning(self, "Error", "Please fill both fields!")
-
-
+            QMessageBox.warning(self, "Помилка", "Невірний email або пароль!")

@@ -1,32 +1,39 @@
-CREATE TABLE `users` (
-  `id` integer PRIMARY KEY,
-  `first_name` varchar(255),
-  `last_name` varchar(255),
-  `email` varchar(255),
-  `password` varchar[255],
-  `role` varchar(255),
-  `created_at` timestamp
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE `account` (
-  `id` integer PRIMARY KEY,
-  `id_of_user` integer UNIQUE,
-  `balance` integer,
-  `category` varchar(255),
-  `history_of_transaction` varchar(255)
+CREATE TABLE IF NOT EXISTS admins (
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    user_id INTEGER UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE `admin` (
-  `id` integer PRIMARY KEY,
-  `password` varchar(255)
+CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    user_id INTEGER NOT NULL,
+    balance DECIMAL(10,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE `transaction` (
-  `id` integer PRIMARY KEY,
-  `amount_of_transaction` varchar(255),
-  `type_of_transacton` varchar(255),
-  `description` varchar(255),
-  `date` date
-);
 
-ALTER TABLE `account` ADD FOREIGN KEY (`id_of_user`) REFERENCES `users` (`id`);
+CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    reference VARCHAR(255) UNIQUE NOT NULL,
+    description VARCHAR(255),
+    amount DECIMAL(10,2) NOT NULL,
+    transaction_type VARCHAR(50) NOT NULL, 
+    category VARCHAR(100),
+    sender_account_id INTEGER,
+    receiver_account_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sender_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+    FOREIGN KEY (receiver_account_id) REFERENCES accounts(id) ON DELETE SET NULL
+);

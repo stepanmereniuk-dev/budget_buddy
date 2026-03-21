@@ -1,58 +1,54 @@
+import sys
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QFrame, 
-    QHBoxLayout, QPushButton
+    QApplication,
+    QMainWindow,
+    QStackedWidget,
+    QWidget,
+    QVBoxLayout,
 )
 from PySide6.QtCore import Qt
-import sys
+from pages import LoginPage, SigninPage, Dashboard
+
 
 class App(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Budget buddy")
+        self.setWindowTitle("Budget Buddy")
 
         central_widget = QWidget()
-        central_widget.setStyleSheet("""
-            QWidget {
-                background-color: white;
-                border-radius: 16px;
-            }
-        """
-        )
-        horisontal_grid = QHBoxLayout()
-        horisontal_grid.setSpacing(20)          
-        horisontal_grid.setContentsMargins(40, 40, 40, 40)
-        
-        styled_frame = QFrame()
-        styled_frame.setStyleSheet("""
-            QFrame {
-                background-color: green;
-                border-radius: 16px;
-            }
-        """)
-        
-        login_frame = QFrame()
-        login_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 1px solid #ddd;
-                border-radius: 16px;
-            }
-        """)
-        
-        
-        
-        styled_frame.setMinimumSize(300, 400)
-        login_frame.setMinimumSize(400, 500)
-        
-        horisontal_grid.addWidget(styled_frame)
-        horisontal_grid.addWidget(login_frame)
-        central_widget.setLayout(horisontal_grid)
-    
+        central_widget.setStyleSheet("background-color: white;")
         self.setCentralWidget(central_widget)
-        self.setMinimumSize(800, 600)
+
+        vertical_layout = QVBoxLayout(central_widget)
+
+        self.stack = QStackedWidget()
+
+        self.login_page = LoginPage()
+        self.signin_page = SigninPage()
+        self.dashboard = Dashboard(self)
+
+        self.stack.addWidget(self.login_page)
+        self.stack.addWidget(self.signin_page)
+        self.stack.addWidget(self.dashboard)
+        
+        vertical_layout.addWidget(self.stack)
+        self.stack.setCurrentIndex(0)
+        self.login_page.go_to_register.connect(self.switch_to_signin)
+        self.signin_page.go_to_login.connect(self.switch_to_login)
+        self.login_page.login_success.connect(self.switch_to_dashboard)
+
+    def switch_to_login(self):
+        self.stack.setCurrentIndex(0)
+
+    def switch_to_signin(self):
+        self.stack.setCurrentIndex(1)
+        
+    def switch_to_dashboard(self):
+        self.stack.setCurrentIndex(2)
 
 
-app = QApplication(sys.argv)
-window = App()
-window.showMaximized()
-sys.exit(app.exec())
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = App()
+    window.showMaximized()
+    sys.exit(app.exec())

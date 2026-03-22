@@ -1,9 +1,17 @@
 from PySide6.QtWidgets import (
     QWidget, QFrame, QHBoxLayout, QVBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QGridLayout, QStackedWidget,
-    QInputDialog, QMessageBox, QComboBox
+    QInputDialog, QMessageBox
 )
 from PySide6.QtCore import Qt
+
+# ====================== FOR GRAPHICS ======================
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+
+sns.set_style("whitegrid")
 
 
 class Dashboard(QWidget):
@@ -13,7 +21,11 @@ class Dashboard(QWidget):
         self.account_service = None
         self.balance_value_label = None
         self.create_btn = None
+        self.transfer_btn = None
+        self.deposit_btn = None
         self.table = None
+        self.fig = None
+        self.canvas = None
         self.setup_ui()
 
     def setup_ui(self):
@@ -77,16 +89,14 @@ class Dashboard(QWidget):
             self.welcome.setText("Hello, User! 👋")
 
     def update_balance(self):
-        if (self.account_service and 
-            hasattr(self.main_window, 'current_user') and 
-            self.main_window.current_user):
+        if self.account_service and hasattr(self.main_window, 'current_user') and self.main_window.current_user:
             user_id = self.main_window.current_user.get('id')
             total = self.account_service.get_user_total_balance(user_id)
             self.balance_value_label.setText(f"${total:,.2f}")
         else:
             self.balance_value_label.setText("$0.00")
 
-    # ====================== HOME PAGE ======================
+    # ====================== HOME PAGE (ONLY BALANCE + SMALLER GRAPH) ======================
     def create_home_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -95,24 +105,27 @@ class Dashboard(QWidget):
         grid = QGridLayout()
         grid.setSpacing(20)
 
+        # Total Balance (full width)
         balance_frame, self.balance_value_label = self.create_card("Total Balance", "$0.00", "#4CAF50")
-        grid.addWidget(balance_frame, 0, 0)
-        grid.addWidget(self.create_card("Monthly Expenses", "-$3,280", "#F44336")[0], 0, 1)
-        grid.addWidget(self.create_card("Monthly Income", "+$8,900", "#2196F3")[0], 1, 0)
-        grid.addWidget(self.create_card("Active Goals", "3 Items", "#FF9800")[0], 1, 1)
+        grid.addWidget(balance_frame, 0, 0, 1, 2)
+
+        # Smaller graph
+        self.chart_frame = self.create_balance_chart()
+        grid.addWidget(self.chart_frame, 1, 0, 1, 2)
 
         layout.addLayout(grid)
 
+        # ====================== BUTTONS (now always visible) ======================
         btn_layout = QHBoxLayout()
         self.create_btn = QPushButton("➕ Create Account")
         self.transfer_btn = QPushButton("↔ Transfer Money")
-        deposit_btn = QPushButton("💰 Deposit / Withdraw")
+        self.deposit_btn = QPushButton("💰 Deposit / Withdraw")
 
         self.create_btn.clicked.connect(self.show_create_account_dialog)
         self.transfer_btn.clicked.connect(self.show_transfer_dialog)
-        deposit_btn.clicked.connect(self.show_deposit_dialog)
+        self.deposit_btn.clicked.connect(self.show_deposit_dialog)
 
-        for btn in (self.create_btn, self.transfer_btn, deposit_btn):
+        for btn in (self.create_btn, self.transfer_btn, self.deposit_btn):
             btn.setCursor(Qt.PointingHandCursor)
             btn.setStyleSheet("""
                 QPushButton { background-color: #6A1B9A; color: white;
@@ -125,140 +138,154 @@ class Dashboard(QWidget):
         layout.addStretch()
         return page
 
-    # ====================== TRANSFER (fixed + black text) ======================
-    # ====================== EMAIL TRANSFER (with auto-select) ======================
+    # ====================== SMALLER BAR CHART ======================
+    def create_balance_chart(self):
+        frame = QFrame()
+        frame.setStyleSheet("""
+            QFrame { background-color: #F8F9FA; border: 1px solid #EEE;
+                     border-radius: 20px; padding: 10px; }
+        """)
+        layout = QVBoxLayout(frame)
+
+        title = QLabel("Balance Change Over Time")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
+        layout.addWidget(title)
+
+        self.fig = plt.figure(figsize=(8, 4))   # small graph
+        self.canvas = FigureCanvas(self.fig)
+        layout.addWidget(self.canvas)
+
+        self.refresh_chart()
+        return frame
+
+    def refresh_chart(self):
+        if not hasattr(self, 'canvas') or not self.main_window.current_user:
+            return
+
+        user_id = self.main_window.current_user['id']
+        txs = self.account_service.get_user_transactions(user_id)
+
+        self.fig.clear()
+        ax = self.fig.add_subplot(111)
+
+        if not txs:
+            ax.text(0.5, 0.5, "No transactions yet\nCreate an account or make a transaction", 
+                    ha='center', va='center', fontsize=12, color='#888')
+            self.canvas.draw()
+            return
+
+        df = pd.DataFrame(txs)
+        df['created_at'] = pd.to_datetime(df['created_at'])
+        df['date'] = df['created_at'].dt.date
+
+        # Calculate net change
+        df['change'] = df.apply(
+            lambda row: row['amount'] 
+            if str(row.get('transaction_type', '')).lower() in ['income', 'deposit'] 
+            else -row['amount'], 
+            axis=1
+        )
+
+        daily = df.groupby('date')['change'].sum().reset_index()
+        daily['cum_balance'] = daily['change'].cumsum()
+
+        # Bars
+        colors = ['#4CAF50' if x >= 0 else '#F44336' for x in daily['change']]
+        sns.barplot(data=daily, x='date', y='cum_balance', ax=ax, palette=colors, edgecolor='black')
+
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Balance ($)")
+        ax.set_title("How Balance Changed (Cumulative)")
+        ax.grid(True)
+        plt.xticks(rotation=45, ha='right')
+        self.fig.tight_layout()
+        self.canvas.draw()
+
+    # ====================== TRANSFER BY EMAIL ======================
     def show_transfer_dialog(self):
         user_id = self.main_window.current_user['id']
         accounts = self.account_service.get_user_accounts(user_id)
         if not accounts:
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Error")
-            msg.setText("You have no accounts!")
-            msg.setStyleSheet("color: black;")
-            msg.exec()
+            QMessageBox.warning(self, "Error", "You don't have any accounts!")
             return
 
         sender_items = [f"Account {acc['id']} (${acc['balance']:,.2f})" for acc in accounts]
-        sender_str, ok1 = QInputDialog.getItem(self, "Transfer", "Sender (account):", sender_items, 0, True)
-        if not ok1:
-            return
-
-        sender_id = next((acc['id'] for acc in accounts
-                         if f"Account {acc['id']} (${acc['balance']:,.2f})" == sender_str), None)
-        if sender_id is None:
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Error")
-            msg.setText("Sender account not found!")
-            msg.setStyleSheet("color: black;")
-            msg.exec()
-            return
+        sender_str, ok1 = QInputDialog.getItem(self, "Transfer", "Sender:", sender_items, 0, True)
+        if not ok1: return
+        sender_id = next((acc['id'] for acc in accounts if f"Account {acc['id']} (${acc['balance']:,.2f})" == sender_str), None)
+        if sender_id is None: return
 
         all_options = self.account_service.get_all_receiver_options()
-        if not all_options:
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Error")
-            msg.setText("No recipient accounts available in the database!")
-            msg.setStyleSheet("color: black;")
-            msg.exec()
-            return
-
-        receiver_items = [f"{opt['email']} (Account {opt['account_id']} - ${opt['balance']:,.2f})"
-                         for opt in all_options]
-
+        receiver_items = [f"{opt['email']} (Account {opt['account_id']} - ${opt['balance']:,.2f})" for opt in all_options]
         receiver_str, ok2 = QInputDialog.getItem(self, "Transfer", "Recipient (email):", receiver_items, 0, True)
-        if not ok2:
-            return
-
-        receiver_id = None
-        for opt in all_options:
-            display = f"{opt['email']} (Account {opt['account_id']} - ${opt['balance']:,.2f})"
-            if display == receiver_str:
-                receiver_id = opt['account_id']
-                break
-
-        if receiver_id is None:
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Error")
-            msg.setText("Receiver not found in database!")
-            msg.setStyleSheet("color: black;")
-            msg.exec()
-            return
+        if not ok2: return
+        receiver_id = next((opt['account_id'] for opt in all_options 
+                           if f"{opt['email']} (Account {opt['account_id']} - ${opt['balance']:,.2f})" == receiver_str), None)
+        if receiver_id is None: return
 
         amount, ok3 = QInputDialog.getDouble(self, "Transfer", "Amount:", 0.0, 0.01, 999999, 2)
-        if not ok3:
-            return
+        if not ok3: return
 
         try:
             self.account_service.create_transfer(sender_id, receiver_id, amount, user_id)
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Success")
-            msg.setText(f"Transferred ${amount:,.2f} to recipient email!")
-            msg.setStyleSheet("color: black;")
-            msg.exec()
+            QMessageBox.information(self, "Success", f"Transferred ${amount:,.2f}!")
             self.update_balance()
+            self.refresh_chart()
             if self.pages_stack.currentIndex() == 1:
                 self.load_transactions()
         except Exception as e:
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Error")
-            msg.setText(str(e))
-            msg.setStyleSheet("color: black;")
-            msg.exec()
+            QMessageBox.warning(self, "Error", str(e))
 
     # ====================== DEPOSIT / WITHDRAW ======================
     def show_deposit_dialog(self):
-            user_id = self.main_window.current_user['id']
-            accounts = self.account_service.get_user_accounts(user_id)
-            if not accounts:
-                msg = QMessageBox(self)
-                msg.setWindowTitle("Error")
-                msg.setText("You have no accounts!")
-                msg.setStyleSheet("color: black;")
-                msg.exec()
-                return
+        user_id = self.main_window.current_user['id']
+        accounts = self.account_service.get_user_accounts(user_id)
+        if not accounts:
+            QMessageBox.warning(self, "Error", "You don't have any accounts!")
+            return
 
-            account_items = [f"Account {acc['id']} (${acc['balance']:,.2f})" for acc in accounts]
-            account_str, ok1 = QInputDialog.getItem(self, "Deposit / Withdraw", "Select account:", account_items, 0, True)
-            if not ok1:
-                return
+        account_items = [f"Account {acc['id']} (${acc['balance']:,.2f})" for acc in accounts]
+        account_str, ok1 = QInputDialog.getItem(self, "Deposit / Withdraw", "Select account:", account_items, 0, True)
+        if not ok1: return
+        account_id = next((acc['id'] for acc in accounts if f"Account {acc['id']} (${acc['balance']:,.2f})" == account_str), None)
+        if account_id is None: return
 
-            account_id = next((acc['id'] for acc in accounts 
-                            if f"Account {acc['id']} (${acc['balance']:,.2f})" == account_str), None)
-            if account_id is None:
-                return
+        types = ["Deposit", "Withdraw"]
+        type_str, ok2 = QInputDialog.getItem(self, "Deposit / Withdraw", "Type:", types, 0, True)
+        if not ok2: return
 
-            types = ["Deposit", "Withdraw"]
-            type_str, ok2 = QInputDialog.getItem(self, "Deposit / Withdraw", "Operation type:", types, 0, True)
-            if not ok2:
-                return
+        amount, ok3 = QInputDialog.getDouble(self, "Deposit / Withdraw", "Amount:", 0.0, 0.01, 999999, 2)
+        if not ok3: return
 
-            amount, ok3 = QInputDialog.getDouble(self, "Deposit / Withdraw", "Amount:", 0.0, 0.01, 999999, 2)
-            if not ok3:
-                return
+        try:
+            if type_str == "Deposit":
+                self.account_service.create_transaction(user_id, account_id, amount, "income", "Deposit", "Deposit")
+            else:
+                self.account_service.create_transaction(user_id, account_id, amount, "expense", "Withdraw", "Withdrawal")
 
+            QMessageBox.information(self, "Success", f"{type_str} of ${amount:,.2f} completed!")
+            self.update_balance()
+            self.refresh_chart()
+            if self.pages_stack.currentIndex() == 1:
+                self.load_transactions()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+
+    # ====================== CREATE ACCOUNT ======================
+    def show_create_account_dialog(self):
+        user_id = self.main_window.current_user['id']
+        balance, ok = QInputDialog.getDouble(self, "New Account", "Initial Balance ($):", 0.00)
+        if ok:
             try:
-                if type_str == "Deposit":
-                    self.account_service.create_transaction(user_id, account_id, amount, "income", "Deposit", "Deposit")
-                else:
-                    self.account_service.create_transaction(user_id, account_id, amount, "expense", "Withdraw", "Withdraw")
-
-                msg = QMessageBox(self)
-                msg.setWindowTitle("Success")
-                msg.setText(f"{type_str} operation for ${amount:,.2f} completed!")
-                msg.setStyleSheet("color: black;")
-                msg.exec()
-
+                self.account_service.create_account(user_id, balance)
+                QMessageBox.information(self, "Success", "Account created!")
                 self.update_balance()
-                if self.pages_stack.currentIndex() == 1:
-                    self.load_transactions()
+                self.refresh_chart()
+                self.check_create_button_visibility()
             except Exception as e:
-                msg = QMessageBox(self)
-                msg.setWindowTitle("Error")
-                msg.setText(str(e))
-                msg.setStyleSheet("color: black;")
-                msg.exec()
+                QMessageBox.warning(self, "Error", str(e))
 
-    # ====================== TRANSACTIONS PAGE ======================
+    # ====================== REMAINING (no changes) ======================
     def create_transactions_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -289,26 +316,6 @@ class Dashboard(QWidget):
             self.table.setItem(i, 3, QTableWidgetItem(tx['transaction_type'].upper()))
             self.table.setItem(i, 4, QTableWidgetItem(str(tx['from_account'])))
             self.table.setItem(i, 5, QTableWidgetItem(str(tx['to_account'])))
-
-    def show_create_account_dialog(self):
-        user_id = self.main_window.current_user['id']
-        balance, ok = QInputDialog.getDouble(self, "New Account", "Initial Balance ($):", 0.00)
-        if ok:
-            try:
-                self.account_service.create_account(user_id, balance)
-                msg = QMessageBox(self)
-                msg.setWindowTitle("Success")
-                msg.setText("Account created!")
-                msg.setStyleSheet("color: black;")
-                msg.exec()
-                self.update_balance()
-                self.check_create_button_visibility()
-            except Exception as e:
-                msg = QMessageBox(self)
-                msg.setWindowTitle("Error")
-                msg.setText(str(e))
-                msg.setStyleSheet("color: black;")
-                msg.exec()
 
     def check_create_button_visibility(self):
         if self.main_window.current_user and self.create_btn:
@@ -351,6 +358,7 @@ class Dashboard(QWidget):
             QPushButton:hover { color: #6A1B9A; }
         """)
         layout = QHBoxLayout(nav_frame)
+        layout.setSpacing(0)
 
         self.btn_home = QPushButton("🏠 Home")
         self.btn_trans = QPushButton("📊 Transactions")
@@ -360,7 +368,7 @@ class Dashboard(QWidget):
 
         for i, btn in enumerate([self.btn_home, self.btn_trans, self.btn_profile]):
             btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda checked=False, index=i: self.switch_page(index))
+            btn.clicked.connect(lambda checked=False, idx=i: self.switch_page(idx))
             layout.addWidget(btn)
 
         return nav_frame
@@ -374,7 +382,9 @@ class Dashboard(QWidget):
             else:
                 btn.setStyleSheet("color: #888; border: none;")
 
-        if index == 1 and self.table:  
+        if index == 0:
+            self.refresh_chart()
+        elif index == 1 and self.table:
             self.load_transactions()
 
     def logout(self):

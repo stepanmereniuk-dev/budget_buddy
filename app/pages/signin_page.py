@@ -74,11 +74,11 @@ class SigninPage(QWidget):
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
         self.input_confirm.setEchoMode(QLineEdit.EchoMode.Password)
 
-        # ================== НОВИЙ ТЕКСТ ПРО ВИМОГИ ДО ПАРОЛЯ ==================
+        # ================== NEW PASSWORD REQUIREMENTS TEXT ==================
         self.password_hint = QLabel(
-            "Le mot de passe doit être sécurisé, il doit contenir au minimum une\n"
-            "majuscule, une minuscule, un caractère spécial, un chiffre et doit contenir\n"
-            "au minimum dix caractères."
+            "The password must be secure. It should contain at least one\n"
+            "uppercase letter, one lowercase letter, one special character, one digit,\n"
+            "and be at least 10 characters long."
         )
         self.password_hint.setStyleSheet("color: #666666; font-size: 13px; line-height: 1.4;")
         self.password_hint.setWordWrap(True)
@@ -130,22 +130,30 @@ class SigninPage(QWidget):
         confirm = self.input_confirm.text()
 
         if not name or not email or not password:
-            QMessageBox.warning(self, "Sorry", "All fields are required!")
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Sorry")
+            msg.setText("All fields are required!")
+            msg.setStyleSheet("color: black;")
+            msg.exec()
             return
 
         if password != confirm:
-            QMessageBox.warning(self, "Error", "Passwords do not match!")
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Error")
+            msg.setText("Passwords do not match!")
+            msg.setStyleSheet("color: black;")
+            msg.exec()
             return
 
-        # ← НОВА ПЕРЕВІРКА БЕЗПЕКИ ПАРОЛЯ
+        # ← NEW PASSWORD SECURITY CHECK
         if not self.is_valid_password(password):
-            QMessageBox.warning(
-                self,
-                "Mot de passe faible",
-                "Le mot de passe doit être sécurisé, il doit contenir au minimum une\n"
-                "majuscule, une minuscule, un caractère spécial, un chiffre et doit\n"
-                "contenir au minimum dix caractères."
-            )
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Weak Password")
+            msg.setText("Password must be secure. It should contain at least one\n"
+                        "uppercase letter, one lowercase letter, one special character, one digit,\n"
+                        "and be at least 10 characters long.")
+            msg.setStyleSheet("color: black;")
+            msg.exec()
             return
 
         parts = name.split(maxsplit=1)
@@ -155,9 +163,11 @@ class SigninPage(QWidget):
         try:
             self.user_service.create_user(first_name, last_name, email, password)
 
-            QMessageBox.information(self, "Success", "Account created!\nNow you can log in.")
-            
-            self.input_name.clear()
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Success")
+            msg.setText("Account created!\nNow you can log in.")
+            msg.setStyleSheet("color: black;")
+            msg.exec()
             self.input_email.clear()
             self.input_password.clear()
             self.input_confirm.clear()
@@ -167,8 +177,20 @@ class SigninPage(QWidget):
 
         except mysql.Error as err:
             if err.errno == 1062:  
-                QMessageBox.warning(self, "Error", "A user with that email already exists!")
+                msg = QMessageBox(self)
+                msg.setWindowTitle("Error")
+                msg.setText("A user with that email already exists!")
+                msg.setStyleSheet("color: black;")
+                msg.exec()
             else:
-                QMessageBox.warning(self, "Database Error", f"Error: {err}")
+                msg = QMessageBox(self)
+                msg.setWindowTitle("Database Error")
+                msg.setText(f"Error: {err}")
+                msg.setStyleSheet("color: black;")
+                msg.exec()
         except Exception as e:
-            QMessageBox.warning(self, "Error", str(e))
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Error")
+            msg.setText(str(e))
+            msg.setStyleSheet("color: black;")
+            msg.exec()

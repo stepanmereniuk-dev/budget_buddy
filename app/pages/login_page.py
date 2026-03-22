@@ -10,7 +10,7 @@ from servises import UserService
 
 
 class LoginPage(QWidget):
-    login_success = Signal()         
+    login_success = Signal(dict)    
     go_to_register = Signal()
 
     def __init__(self):
@@ -94,16 +94,24 @@ class LoginPage(QWidget):
         password = self.password_input.text().strip()
 
         if not email or not password:
-            QMessageBox.warning(self, "Помилка", "Введіть email та пароль!")
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Error")
+            msg.setText("Please enter both email and password!")
+            msg.setStyleSheet("color: black;")
+            msg.exec()
             return
         user = self.user_service.authenticate_user(email, password)
 
         if user:
-            QMessageBox.information(
-                self, 
-                "Успіх", 
-                f"Вхід виконано!\nПривіт, {user['first_name']} 👋"
-            )
-            self.login_success.emit()            
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Success")
+            msg.setText(f"Welcome, {user['first_name']} {user['last_name']}!")
+            msg.setStyleSheet("color: black;")
+            msg.exec()
+            self.login_success.emit(user)            
         else:
-            QMessageBox.warning(self, "Помилка", "Невірний email або пароль!")
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Error")
+            msg.setText("Invalid email or password!")
+            msg.setStyleSheet("color: black;")
+            msg.exec()

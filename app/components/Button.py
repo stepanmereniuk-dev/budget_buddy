@@ -6,13 +6,14 @@ class Button:
 
     def default_button(self) -> QPushButton:
         btn = QPushButton(self.text)
+        btn.setMinimumHeight(50)
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #6A1B9A;
                 color: white;
-                padding: 15px;
+                padding: 12px;
                 border-radius: 8px;
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {

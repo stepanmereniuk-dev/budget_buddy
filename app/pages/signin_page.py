@@ -17,29 +17,46 @@ class SigninPage(QWidget):
     def __init__(self):
         super().__init__()
         self.user_service = UserService()    
+        self.is_mobile = False
         self.setup_ui()
 
     def setup_ui(self):
-        main_layout = QHBoxLayout(self)
-        main_layout.setSpacing(20)
-        main_layout.setContentsMargins(40, 40, 40, 40)
+        # Detect screen size
+        screen = self.screen()
+        if screen:
+            screen_width = screen.size().width()
+            self.is_mobile = screen_width < 768
+        
+        # Use vertical layout on mobile, horizontal on desktop
+        if self.is_mobile:
+            main_layout = QVBoxLayout(self)
+            main_layout.setContentsMargins(15, 15, 15, 15)
+            main_layout.setSpacing(15)
+        else:
+            main_layout = QHBoxLayout(self)
+            main_layout.setSpacing(20)
+            main_layout.setContentsMargins(40, 40, 40, 40)
 
         # ================== GREETING FRAME ==================
         greeting_frame = QFrame()
         greeting_frame.setStyleSheet("QFrame { background-color: #6A1B9A; border-radius: 20px; }")
-        greeting_frame.setMinimumSize(400, 500)
+        
+        if self.is_mobile:
+            greeting_frame.setMinimumHeight(200)
+        else:
+            greeting_frame.setMinimumSize(400, 500)
 
         greeting_layout = QVBoxLayout(greeting_frame)
-        greeting_layout.setSpacing(30)
-        greeting_layout.setContentsMargins(50, 120, 50, 120)
+        greeting_layout.setSpacing(20 if self.is_mobile else 30)
+        greeting_layout.setContentsMargins(20 if self.is_mobile else 50, 30 if self.is_mobile else 120, 20 if self.is_mobile else 50, 30 if self.is_mobile else 120)
         greeting_layout.setAlignment(Qt.AlignCenter)
 
         hello = QLabel("Create Account!")
-        hello.setStyleSheet("color: white; font-size: 32px; font-weight: bold;")
+        hello.setStyleSheet(f"color: white; font-size: {24 if self.is_mobile else 32}px; font-weight: bold;")
         hello.setAlignment(Qt.AlignCenter)
 
         desc = QLabel("Register with your personal details to use all\nof the platform's features.")
-        desc.setStyleSheet("color: white; font-size: 16px;")
+        desc.setStyleSheet(f"color: white; font-size: {14 if self.is_mobile else 16}px;")
         desc.setWordWrap(True)
         desc.setAlignment(Qt.AlignCenter)
 
@@ -56,14 +73,18 @@ class SigninPage(QWidget):
                 border-radius: 20px;
             }
         """)
-        form_frame.setMinimumSize(400, 500)
+        
+        if self.is_mobile:
+            form_frame.setMinimumHeight(400)
+        else:
+            form_frame.setMinimumSize(400, 500)
 
         form_layout = QVBoxLayout(form_frame)
-        form_layout.setSpacing(25)
-        form_layout.setContentsMargins(50, 60, 50, 60)
+        form_layout.setSpacing(18 if self.is_mobile else 25)
+        form_layout.setContentsMargins(20 if self.is_mobile else 50, 30 if self.is_mobile else 60, 20 if self.is_mobile else 50, 30 if self.is_mobile else 60)
 
         title = QLabel("Sign Up")
-        title.setStyleSheet("font-size: 28px; font-weight: bold; color: #333;")
+        title.setStyleSheet(f"font-size: {24 if self.is_mobile else 28}px; font-weight: bold; color: #333;")
         title.setAlignment(Qt.AlignCenter)
 
         self.input_name = Input("Full Name").default_input()
@@ -80,7 +101,7 @@ class SigninPage(QWidget):
             "uppercase letter, one lowercase letter, one special character, one digit,\n"
             "and be at least 10 characters long."
         )
-        self.password_hint.setStyleSheet("color: #666666; font-size: 13px; line-height: 1.4;")
+        self.password_hint.setStyleSheet(f"color: #666666; font-size: {11 if self.is_mobile else 13}px; line-height: 1.4;")
         self.password_hint.setWordWrap(True)
         self.password_hint.setAlignment(Qt.AlignCenter)
 
@@ -93,6 +114,7 @@ class SigninPage(QWidget):
         )
         switch_label.setTextFormat(Qt.TextFormat.RichText)
         switch_label.setAlignment(Qt.AlignCenter)
+        switch_label.setStyleSheet(f"font-size: {12 if self.is_mobile else 14}px;")
         switch_label.linkActivated.connect(lambda _: self.go_to_login.emit())
 
         form_layout.addWidget(title)
@@ -107,8 +129,6 @@ class SigninPage(QWidget):
 
         main_layout.addWidget(greeting_frame, 1)
         main_layout.addWidget(form_frame, 1)
-
-        self.setMinimumSize(880, 560)
     def is_valid_password(self, password: str) -> bool:
 
         if len(password) < 10:

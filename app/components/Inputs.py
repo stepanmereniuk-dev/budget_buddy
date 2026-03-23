@@ -8,13 +8,14 @@ class Input:
 
         widget = QLineEdit()
         widget.setPlaceholderText(self.placeholder)
+        widget.setMinimumHeight(50)
         
         widget.setStyleSheet("""
             QLineEdit {
-                padding: 15px;
+                padding: 12px;
                 border: 1px solid #ddd;
                 border-radius: 8px;
-                font-size: 16px;
+                font-size: 14px;
                 background-color: #f9f9f9;
                 color: #333333;                   
             }

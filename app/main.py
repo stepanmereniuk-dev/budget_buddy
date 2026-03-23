@@ -6,8 +6,8 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette, QColor
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QPalette, QColor, QScreen
 from pages import LoginPage, SigninPage, Dashboard
 from servises import AccountAndTransactionManager
 
@@ -24,6 +24,8 @@ class App(QMainWindow):
         self.current_user = None
 
         vertical_layout = QVBoxLayout(central_widget)
+        vertical_layout.setContentsMargins(0, 0, 0, 0)
+        vertical_layout.setSpacing(0)
 
         self.stack = QStackedWidget()
 
@@ -48,6 +50,30 @@ class App(QMainWindow):
         self.login_page.login_success.connect(
             lambda user: (self.dashboard.check_create_button_visibility(), self.dashboard.update_balance())
         )
+        
+        # Set adaptive window size
+        self.setup_window_size()
+
+    def setup_window_size(self):
+        """Set responsive window size based on screen"""
+        screen = self.screen()
+        screen_size = screen.size()
+        screen_width = screen_size.width()
+        screen_height = screen_size.height()
+        
+        # Desktop: 90% of screen, Mobile: full screen
+        if screen_width < 768:
+            # Mobile
+            self.setGeometry(0, 0, screen_width, screen_height)
+            self.showMaximized()
+        else:
+            # Desktop
+            window_width = int(screen_width * 0.9)
+            window_height = int(screen_height * 0.9)
+            self.setGeometry(screen_width // 2 - window_width // 2,
+                           screen_height // 2 - window_height // 2,
+                           window_width, window_height)
+            self.show()
 
     def switch_to_login(self):
         self.stack.setCurrentIndex(0)
@@ -76,5 +102,4 @@ if __name__ == "__main__":
     palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
     app.setPalette(palette)
     window = App()
-    window.showMaximized()
     sys.exit(app.exec())

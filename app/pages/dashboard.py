@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QFrame, QHBoxLayout, QVBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QGridLayout, QStackedWidget,
-    QInputDialog, QMessageBox
+    QInputDialog, QMessageBox, QScrollArea
 )
 from PySide6.QtCore import Qt
 
@@ -26,6 +26,15 @@ class Dashboard(QWidget):
         self.table = None
         self.fig = None
         self.canvas = None
+        
+        # Detect screen size
+        screen = self.screen()
+        if screen:
+            screen_width = screen.size().width()
+            self.is_mobile = screen_width < 768
+        else:
+            self.is_mobile = False
+        
         self.setup_ui()
 
     def setup_ui(self):
@@ -53,25 +62,27 @@ class Dashboard(QWidget):
     # ====================== HEADER ======================
     def create_header(self):
         header_frame = QFrame()
-        header_frame.setFixedHeight(80)
+        header_height = 60 if self.is_mobile else 80
+        header_frame.setFixedHeight(header_height)
         header_frame.setStyleSheet("""
             QFrame { background-color: #6A1B9A; color: white;
                      border-bottom-left-radius: 20px;
                      border-bottom-right-radius: 20px; }
         """)
         layout = QHBoxLayout(header_frame)
-        layout.setContentsMargins(30, 0, 30, 0)
+        layout.setContentsMargins(15 if self.is_mobile else 30, 0, 15 if self.is_mobile else 30, 0)
 
         self.welcome = QLabel("Hello, User! 👋")
-        self.welcome.setStyleSheet("font-size: 20px; font-weight: bold;")
+        self.welcome.setStyleSheet(f"font-size: {16 if self.is_mobile else 20}px; font-weight: bold;")
 
         logout_btn = QPushButton("Log Out")
         logout_btn.setCursor(Qt.PointingHandCursor)
-        logout_btn.setFixedSize(90, 35)
-        logout_btn.setStyleSheet("""
-            QPushButton { background-color: rgba(255,255,255,0.2); color: white;
-                          border: 1px solid white; border-radius: 10px; font-weight: bold; }
-            QPushButton:hover { background-color: rgba(255,255,255,0.3); }
+        logout_btn.setFixedSize(80 if self.is_mobile else 90, 35)
+        logout_btn.setStyleSheet(f"""
+            QPushButton {{ background-color: rgba(255,255,255,0.2); color: white;
+                          border: 1px solid white; border-radius: 10px; font-weight: bold;
+                          font-size: {12 if self.is_mobile else 14}px; }}
+            QPushButton:hover {{ background-color: rgba(255,255,255,0.3); }}
         """)
         logout_btn.clicked.connect(self.logout)
 
@@ -96,14 +107,14 @@ class Dashboard(QWidget):
         else:
             self.balance_value_label.setText("$0.00")
 
-    # ====================== HOME PAGE (ONLY BALANCE + SMALLER GRAPH) ======================
+    # ====================== HOME PAGE (RESPONSIVE) ======================
     def create_home_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(15 if self.is_mobile else 30, 15 if self.is_mobile else 30, 15 if self.is_mobile else 30, 15 if self.is_mobile else 30)
 
         grid = QGridLayout()
-        grid.setSpacing(20)
+        grid.setSpacing(15 if self.is_mobile else 20)
 
         # Total Balance (full width)
         balance_frame, self.balance_value_label = self.create_card("Total Balance", "$0.00", "#4CAF50")
@@ -115,8 +126,8 @@ class Dashboard(QWidget):
 
         layout.addLayout(grid)
 
-        # ====================== BUTTONS (now always visible) ======================
-        btn_layout = QHBoxLayout()
+        # ====================== BUTTONS (RESPONSIVE) ======================
+        btn_layout = QVBoxLayout() if self.is_mobile else QHBoxLayout()
         self.create_btn = QPushButton("➕ Create Account")
         self.transfer_btn = QPushButton("↔ Transfer Money")
         self.deposit_btn = QPushButton("💰 Deposit / Withdraw")
@@ -127,18 +138,22 @@ class Dashboard(QWidget):
 
         for btn in (self.create_btn, self.transfer_btn, self.deposit_btn):
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setStyleSheet("""
-                QPushButton { background-color: #6A1B9A; color: white;
-                              border-radius: 12px; padding: 12px; font-weight: bold; }
-                QPushButton:hover { background-color: #8E24AA; }
+            btn_font_size = 12 if self.is_mobile else 14
+            btn.setStyleSheet(f"""
+                QPushButton {{ background-color: #6A1B9A; color: white;
+                              border-radius: 12px; padding: 12px; font-weight: bold;
+                              font-size: {btn_font_size}px; }}
+                QPushButton:hover {{ background-color: #8E24AA; }}
             """)
+            if self.is_mobile:
+                btn.setMinimumHeight(45)
             btn_layout.addWidget(btn)
 
         layout.addLayout(btn_layout)
         layout.addStretch()
         return page
 
-    # ====================== SMALLER BAR CHART ======================
+    # ====================== RESPONSIVE CHART ======================
     def create_balance_chart(self):
         frame = QFrame()
         frame.setStyleSheet("""
@@ -148,10 +163,13 @@ class Dashboard(QWidget):
         layout = QVBoxLayout(frame)
 
         title = QLabel("Balance Change Over Time")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
+        title.setStyleSheet(f"font-size: {14 if self.is_mobile else 16}px; font-weight: bold; color: #333;")
         layout.addWidget(title)
 
-        self.fig = plt.figure(figsize=(8, 4))   # small graph
+        # Smaller figure on mobile
+        fig_width = 8 if not self.is_mobile else 6
+        fig_height = 4 if not self.is_mobile else 3
+        self.fig = plt.figure(figsize=(fig_width, fig_height))
         self.canvas = FigureCanvas(self.fig)
         layout.addWidget(self.canvas)
 
@@ -285,18 +303,28 @@ class Dashboard(QWidget):
             except Exception as e:
                 QMessageBox.warning(self, "Error", str(e))
 
-    # ====================== REMAINING (no changes) ======================
+    # ====================== RESPONSIVE TRANSACTIONS PAGE ======================
     def create_transactions_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(15 if self.is_mobile else 30, 15 if self.is_mobile else 30, 15 if self.is_mobile else 30, 15 if self.is_mobile else 30)
 
         self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(["Date", "Description", "Amount", "Type", "From", "To"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setAlternatingRowColors(True)
+        
+        # Responsive font in table
+        table_font_size = 11 if self.is_mobile else 12
+        self.table.setStyleSheet(f"font-size: {table_font_size}px;")
 
         refresh_btn = QPushButton("🔄 Refresh History")
+        refresh_btn.setMinimumHeight(40 if self.is_mobile else 35)
+        refresh_btn.setStyleSheet(f"""
+            QPushButton {{ background-color: #6A1B9A; color: white; border-radius: 8px;
+                          font-size: {12 if self.is_mobile else 14}px; font-weight: bold; }}
+            QPushButton:hover {{ background-color: #8E24AA; }}
+        """)
         refresh_btn.clicked.connect(self.load_transactions)
 
         layout.addWidget(refresh_btn)
@@ -326,13 +354,13 @@ class Dashboard(QWidget):
         frame = QFrame()
         frame.setStyleSheet(f"""
             QFrame {{ background-color: #F8F9FA; border: 1px solid #EEE;
-                      border-radius: 20px; padding: 15px; }}
+                      border-radius: 20px; padding: {10 if self.is_mobile else 15}px; }}
         """)
         layout = QVBoxLayout(frame)
         lbl_title = QLabel(title)
-        lbl_title.setStyleSheet("font-size: 14px; color: #777;")
+        lbl_title.setStyleSheet(f"font-size: {12 if self.is_mobile else 14}px; color: #777;")
         lbl_value = QLabel(value)
-        lbl_value.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {color};")
+        lbl_value.setStyleSheet(f"font-size: {20 if self.is_mobile else 24}px; font-weight: bold; color: {color};")
         layout.addWidget(lbl_title)
         layout.addWidget(lbl_value)
         return frame, lbl_value
@@ -342,7 +370,7 @@ class Dashboard(QWidget):
         layout = QVBoxLayout(page)
         label = QLabel(title)
         label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("font-size: 24px; color: #666; font-weight: bold;")
+        label.setStyleSheet(f"font-size: {18 if self.is_mobile else 24}px; color: #666; font-weight: bold;")
         layout.addStretch()
         layout.addWidget(label)
         layout.addStretch()
@@ -350,21 +378,23 @@ class Dashboard(QWidget):
 
     def create_nav_bar(self):
         nav_frame = QFrame()
-        nav_frame.setFixedHeight(70)
-        nav_frame.setStyleSheet("""
-            QFrame { background-color: white; border-top: 1px solid #DDD; }
-            QPushButton { background-color: transparent; border: none; color: #888;
-                          font-size: 14px; font-weight: bold; padding: 10px; }
-            QPushButton:hover { color: #6A1B9A; }
+        nav_height = 60 if self.is_mobile else 70
+        nav_frame.setFixedHeight(nav_height)
+        nav_frame.setStyleSheet(f"""
+            QFrame {{ background-color: white; border-top: 1px solid #DDD; }}
+            QPushButton {{ background-color: transparent; border: none; color: #888;
+                          font-size: {11 if self.is_mobile else 14}px; font-weight: bold; padding: 10px; }}
+            QPushButton:hover {{ color: #6A1B9A; }}
         """)
         layout = QHBoxLayout(nav_frame)
         layout.setSpacing(0)
+        layout.setContentsMargins(5 if self.is_mobile else 10, 0, 5 if self.is_mobile else 10, 0)
 
         self.btn_home = QPushButton("🏠 Home")
         self.btn_trans = QPushButton("📊 Transactions")
         self.btn_profile = QPushButton("👤 Profile")
 
-        self.btn_home.setStyleSheet("color: #6A1B9A; border-bottom: 3px solid #6A1B9A;")
+        self.btn_home.setStyleSheet(f"color: #6A1B9A; border-bottom: 3px solid #6A1B9A; font-size: {11 if self.is_mobile else 14}px;")
 
         for i, btn in enumerate([self.btn_home, self.btn_trans, self.btn_profile]):
             btn.setCursor(Qt.PointingHandCursor)
@@ -376,11 +406,12 @@ class Dashboard(QWidget):
     def switch_page(self, index):
         self.pages_stack.setCurrentIndex(index)
         buttons = [self.btn_home, self.btn_trans, self.btn_profile]
+        font_size = 11 if self.is_mobile else 14
         for i, btn in enumerate(buttons):
             if i == index:
-                btn.setStyleSheet("color: #6A1B9A; border-bottom: 3px solid #6A1B9A;")
+                btn.setStyleSheet(f"color: #6A1B9A; border-bottom: 3px solid #6A1B9A; font-size: {font_size}px;")
             else:
-                btn.setStyleSheet("color: #888; border: none;")
+                btn.setStyleSheet(f"color: #888; border: none; font-size: {font_size}px;")
 
         if index == 0:
             self.refresh_chart()

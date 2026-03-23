@@ -130,3 +130,92 @@ class AccountAndTransactionManager:
     def get_user_total_balance(self, user_id: int) -> float:
         row = self._fetch_one("SELECT COALESCE(SUM(balance), 0) as total FROM accounts WHERE user_id = %s", (user_id,))
         return float(row['total']) if row else 0.0
+
+    # ====================== FILTERED SEARCH ======================
+    def search_transactions(self, user_id: int, date_from: str = None, date_to: str = None,
+                            category: str = None, transaction_type: str = None,
+                            sort_by_amount: str = None) -> list:
+        """Search transactions with multiple filters combined.
+
+        Args:
+            date_from: 'YYYY-MM-DD' start date
+            date_to: 'YYYY-MM-DD' end date
+            category: category name filter
+            transaction_type: 'income', 'expense', or 'transfer'
+            sort_by_amount: 'asc' or 'desc'
+        """
+        query = """
+            SELECT t.created_at, t.description, t.amount, t.transaction_type,
+                   t.category,
+                   COALESCE(a_sender.id, '—') as from_account,
+                   COALESCE(a_receiver.id, '—') as to_account
+            FROM transactions t
+            LEFT JOIN accounts a_sender ON t.sender_account_id = a_sender.id
+            LEFT JOIN accounts a_receiver ON t.receiver_account_id = a_receiver.id
+            WHERE (t.sender_account_id IN (SELECT id FROM accounts WHERE user_id = %s)
+               OR t.receiver_account_id IN (SELECT id FROM accounts WHERE user_id = %s))
+        """
+        params = [user_id, user_id]
+
+        if date_from:
+            query += " AND DATE(t.created_at) >= %s"
+            params.append(date_from)
+        if date_to:
+            query += " AND DATE(t.created_at) <= %s"
+            params.append(date_to)
+        if category:
+            query += " AND t.category = %s"
+            params.append(category)
+        if transaction_type:
+            if transaction_type.lower() == "transfer":
+                query += " AND t.category = 'Transfer'"
+            else:
+                query += " AND t.transaction_type = %s"
+                params.append(transaction_type)
+
+        if sort_by_amount and sort_by_amount.lower() in ('asc', 'desc'):
+            query += f" ORDER BY t.amount {sort_by_amount.upper()}"
+        else:
+            query += " ORDER BY t.created_at DESC"
+
+        return self._fetch_all(query, tuple(params))
+
+    def get_user_categories(self, user_id: int) -> list:
+        """Get distinct categories used by this user."""
+        query = """
+            SELECT DISTINCT t.category FROM transactions t
+            WHERE (t.sender_account_id IN (SELECT id FROM accounts WHERE user_id = %s)
+               OR t.receiver_account_id IN (SELECT id FROM accounts WHERE user_id = %s))
+            AND t.category IS NOT NULL
+            ORDER BY t.category
+        """
+        rows = self._fetch_all(query, (user_id, user_id))
+        return [r['category'] for r in rows if r['category']]
+
+    def get_monthly_summary(self, user_id: int) -> list:
+        """Get monthly income/expense summary."""
+        query = """
+            SELECT DATE_FORMAT(t.created_at, '%%Y-%%m') as month,
+                   SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE 0 END) as total_income,
+                   SUM(CASE WHEN t.transaction_type = 'expense' THEN t.amount ELSE 0 END) as total_expense
+            FROM transactions t
+            WHERE t.sender_account_id IN (SELECT id FROM accounts WHERE user_id = %s)
+               OR t.receiver_account_id IN (SELECT id FROM accounts WHERE user_id = %s)
+            GROUP BY DATE_FORMAT(t.created_at, '%%Y-%%m')
+            ORDER BY month DESC
+            LIMIT 12
+        """
+        return self._fetch_all(query, (user_id, user_id))
+
+    def get_category_breakdown(self, user_id: int) -> list:
+        """Get expense breakdown by category (for pie/donut chart)."""
+        query = """
+            SELECT t.category, SUM(t.amount) as total
+            FROM transactions t
+            WHERE t.transaction_type = 'expense'
+              AND t.sender_account_id IN (SELECT id FROM accounts WHERE user_id = %s)
+              AND t.category IS NOT NULL
+            GROUP BY t.category
+            ORDER BY total DESC
+        """
+        return self._fetch_all(query, (user_id,))

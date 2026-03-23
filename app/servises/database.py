@@ -12,7 +12,10 @@ class DatabaseConnection:
     def _setup_database(self):
         try:
             self.create_database_if_not_exists()
-            self.execute_sql_file("database/ProjetBuddySchema.sql")
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            schema_path = os.path.join(os.path.dirname(base_dir), "database", "ProjetBuddySchema.sql")
+            self.execute_sql_file(schema_path)
             print("Database and schema from schema.sql CREATED successfully.")
         except Exception as e:
             print("Error setting up the database:", e)
@@ -23,7 +26,7 @@ class DatabaseConnection:
             temp_conn = mysql.connect(
                 host="127.0.0.1",
                 user="root",
-                password="123654789",
+                password="",
             )
             cursor = temp_conn.cursor()
             cursor.execute("SHOW DATABASES LIKE 'budget_buddy_db'")
@@ -38,7 +41,7 @@ class DatabaseConnection:
             self.connection = mysql.connect(
                 host="127.0.0.1",
                 user="root",
-                password="123654789",
+                password="",
                 database="budget_buddy_db"
             )
             print("Connected to budget_buddy_db")
@@ -78,7 +81,7 @@ class DatabaseConnection:
             self.connection = mysql.connect(
                 host="127.0.0.1",
                 user="root",
-                password="123654789",
+                password="",
                 database="budget_buddy_db"
             )
         return self.connection
